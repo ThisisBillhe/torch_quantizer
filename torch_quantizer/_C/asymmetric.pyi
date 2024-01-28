@@ -1,0 +1,6 @@
+import torch
+from typing import Tuple
+
+def myQuantize(src: torch.Tensor, act_delta: torch.Tensor, act_zp: torch.Tensor) -> torch.Tensor: ...
+
+def myQuantizeNCHW(src: torch.Tensor, act_delta: torch.Tensor, act_zp: torch.Tensor) -> torch.Tensor: ...
