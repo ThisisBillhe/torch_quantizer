@@ -34,6 +34,35 @@ To benchmark and verify the inference speedup by INT8 operation, use the followi
 python3 example/benchmark/benchmark.py --o linear --bs 512 --cin 960 --cout 960
 python3 example/benchmark/benchmark.py --o conv2d --bs 1 --cin 512 --cout 512
 ```
+#### Benchmarking Results
+
+Here are the results for both linear and 2D convolution operations, showing the average time taken for FP32, FP16, and INT8 (Quant+Dequant) operations on RTX 3090.
+
+##### Linear Operation
+
+- **Batch Size:** 512
+- **Channels In:** 960
+- **Channels Out:** 960
+
+| Operation Type | Average Time    |
+|----------------|-----------------|
+| FP32           | 8.414e-05 s     |
+| FP16           | 3.304e-05 s     |
+| INT8 (Quant+Dequant) | 2.908e-05 s |
+
+##### 2D Convolution Operation
+
+- **Batch Size:** 1
+- **Channels In:** 512
+- **Channels Out:** 512
+
+| Operation Type | Average Time    |
+|----------------|-----------------|
+| FP32           | 0.000903 s      |
+| FP16           | 0.000413 s      |
+| INT8 (Quant+Dequant) | 0.000178 s |
+
+These results highlight the performance improvements achieved through quantization to INT8, demonstrating significant reductions in inference time across both operations.
 
 ### Model Conversion to INT8
 
