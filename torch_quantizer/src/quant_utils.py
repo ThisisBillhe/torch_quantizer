@@ -41,7 +41,7 @@ class SymmetricQuantizer(nn.Module):
         self.scale_method = scale_method
 
         self.inited = False # use this when quantizing models
-        self.delta = self.register_buffer('delta', torch.tensor(0.005))
+        self.register_buffer('delta', torch.tensor(0.005))
         
     def clipping(self, x, lower, upper):
         # clip lower
