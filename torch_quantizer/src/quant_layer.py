@@ -54,7 +54,11 @@ class qlinear_8bit(nn.Module):
     """
     def __init__(self, org_module: nn.Linear, n_bits=8, num_steps=1):
         super(qlinear_8bit, self).__init__()
-
+        
+        ## Copy attributes from org_module
+        self.in_features = org_module.in_features
+        self.out_features = org_module.out_features
+        
         self.fwd_kwargs = dict()
         # self.org_weight = org_module.weight.data.clone()
 
