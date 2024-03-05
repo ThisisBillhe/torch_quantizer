@@ -32,7 +32,8 @@ def main():
     elif args.o == 'conv2d':
         # Ensure required arguments for conv2d operation are provided
         if args.cin > 0 and args.cout > 0 and args.h > 0 and args.w > 0 and args.k > 0:
-            tq.benchmark_conv2d(bs=args.bs, cin=args.cin, h=args.h, w=args.w, cout=args.cout, k=args.k, padding=args.p)
+            # tq.benchmark_conv2d(bs=args.bs, cin=args.cin, h=args.h, w=args.w, cout=args.cout, k=args.k, padding=args.p)
+            tq.benchmark_conv2dInheritance(bs=args.bs, cin=args.cin, h=args.h, w=args.w, cout=args.cout, k=args.k, padding=args.p)
         else:
             print("Error: cin, cout, h, w, and k are required for conv2d benchmark.")
 

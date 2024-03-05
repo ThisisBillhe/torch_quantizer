@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch_quantizer
-from torch_quantizer.src.quant_layer import qlinear_8bit_Linherit
+from torch_quantizer.src.quant_layer import qlinear_8bit_Linherit, qconv2d_8bit_Cinherit
 
 def calculate_channelwise_quant_params(weight_matrix, n_bits=8):
     # Assuming each row is a channel
@@ -213,6 +213,58 @@ def benchmark_conv2d(bs=8, cin=384, h=32, w=32, cout=384, k=3, padding=0):
         if padding != 0:
             x_nhwc = F.pad(x_nhwc, pad=(0,0,padding,padding,padding,padding), value=act_zp)
         out_int8_fused = torch_quantizer.matmul.myInt8Conv(x_nhwc, weight_nhwc, 0, 0, 1, 1, 1, 1, zp_times_weight_channel_sum, act_times_weight_delta, bias)
+    torch.cuda.synchronize()
+    end_time = time.perf_counter()
+    print('average time for INT8 (Quant+Dequant): ', (end_time-start_time) / 100)
+
+def benchmark_conv2dInheritance(bs=8, cin=384, h=32, w=32, cout=384, k=3, padding=0):
+    x = (torch.randn((bs,cin,h,w)) + 3).half().cuda()
+    conv1 = nn.Conv2d(cout,cin,k, padding=padding).half().cuda()
+    my_quant_conv = qconv2d_8bit_Cinherit(cout,cin,k, padding=padding).cuda()
+    my_quant_conv.bias.requires_grad = False
+
+    conv1.weight.requires_grad = False
+    conv1.bias.requires_grad = False
+
+    weight = conv1.weight.data
+    weight_delta = calculate_channelwise_symmetric_scale_4D(weight).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+    int_weight = (weight / weight_delta).round().to(torch.int8)
+    weight_nhwc = int_weight.permute(0,2,3,1).contiguous()
+    dequantized_weight = int_weight * weight_delta
+
+    act_delta, act_zp = quantize(x, n_bits=8)
+    int_act = ((x / act_delta).round() + act_zp).to(torch.int8)
+    dequantized_act = (int_act - act_zp) * act_delta
+
+    bias = conv1.bias.unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
+
+    ## warm up
+    out_fp = conv1(x)
+
+    import time
+
+    conv1.float()
+    start_time = time.perf_counter()
+    torch.cuda.synchronize()
+    for i in range(100):
+        out_fp = conv1(x.to(torch.float32))
+    torch.cuda.synchronize()
+    end_time = time.perf_counter()
+    print('average time for FP32: ', (end_time-start_time) / 100)
+
+    conv1.half()
+    start_time = time.perf_counter()
+    torch.cuda.synchronize()
+    for i in range(100):
+        out_fp = conv1(x)
+    torch.cuda.synchronize()
+    end_time = time.perf_counter()
+    print('average time for FP16: ', (end_time-start_time) / 100)
+
+    start_time = time.perf_counter()
+    torch.cuda.synchronize()
+    for i in range(100):
+        out_fp = my_quant_conv(x)
     torch.cuda.synchronize()
     end_time = time.perf_counter()
     print('average time for INT8 (Quant+Dequant): ', (end_time-start_time) / 100)
