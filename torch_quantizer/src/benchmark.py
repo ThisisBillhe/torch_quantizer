@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch_quantizer
+from torch_quantizer.src.quant_layer import qlinear_8bit_Linherit
 
 def calculate_channelwise_quant_params(weight_matrix, n_bits=8):
     # Assuming each row is a channel
@@ -52,6 +53,50 @@ def calculate_channelwise_symmetric_scale_4D(weights):
         scale_factors[i] = max_abs_val / half_range if max_abs_val != 0 else 0
 
     return scale_factors
+
+def benchmark_linearInheritance(bs=512, cin=960, cout=960):
+    assert cin % 32 == 0 and cout % 32 == 0, 'cin and cout should be divisible by 32'
+
+    x = 5 * torch.randn(bs,cin).cuda().to(torch.float16)
+
+    my_quant_linear = qlinear_8bit_Linherit(cout, cin).cuda()
+    linearfp = nn.Linear(cout,cin).cuda()
+
+    bias = linearfp.bias.data.to(torch.float32)
+    weight = linearfp.weight.data.to(torch.float32)
+
+    my_bias = linearfp.bias.data.to(torch.float32)
+    my_weight = linearfp.weight.data.to(torch.float32)
+
+    ## start benchmark
+    import time
+
+    linearfp.float()
+    start_time = time.perf_counter()
+    torch.cuda.synchronize()
+    for i in range(1000):
+        out_fp = linearfp(x.to(torch.float32))
+    torch.cuda.synchronize()
+    end_time = time.perf_counter()
+    print('average time for FP32: ', (end_time-start_time) / 100)
+
+    linearfp.half()
+    start_time = time.perf_counter()
+    torch.cuda.synchronize()
+    for i in range(1000):
+        out_fp = linearfp(x)
+    torch.cuda.synchronize()
+    end_time = time.perf_counter()
+    print('average time for FP16: ', (end_time-start_time) / 100)
+
+
+    start_time = time.perf_counter()
+    torch.cuda.synchronize()
+    for i in range(1000):
+        out_fp = my_quant_linear(x)
+    torch.cuda.synchronize()
+    end_time = time.perf_counter()
+    print('average time for INT8 (Quant+Dequant): ', (end_time-start_time) / 100)
 
 def benchmark_linear(bs=512, cin=960, cout=960):
     assert cin % 32 == 0 and cout % 32 == 0, 'cin and cout should be divisible by 32'

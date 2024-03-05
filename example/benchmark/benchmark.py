@@ -23,7 +23,9 @@ def main():
     if args.o == 'linear':
         # Ensure required arguments for linear operation are provided
         if args.cin > 0 and args.cout > 0:
-            tq.benchmark_linear(bs=args.bs, cin=args.cin, cout=args.cout)
+            # tq.benchmark_linear(bs=args.bs, cin=args.cin, cout=args.cout)
+            # use qlinear inheritted from nn.Linear for benchmark
+            tq.benchmark_linearInheritance(bs=args.bs, cin=args.cin, cout=args.cout)
         else:
             print("Error: cin and cout are required for linear benchmark.")
     

@@ -48,6 +48,88 @@ class FakeQuantModule(nn.Module):
         
         return out
 
+class qlinear_8bit_Linherit(nn.Linear):
+    """
+    8-bit Linear Module. 
+    """
+    def __init__(self, in_features: int = 0, out_features: int = 0, org_module: nn.Linear = None, n_bits=8, num_steps=1):
+
+        if org_module:
+            ## Copy attributes from org_module
+            self.in_features = org_module.in_features
+            self.out_features = org_module.out_features
+            self.ori_shape = org_module.weight.shape
+
+        else:
+            self.in_features = in_features
+            self.out_features = out_features
+            self.ori_shape = [out_features, in_features]
+        
+
+        super(qlinear_8bit_Linherit, self).__init__(self.in_features, self.out_features)
+
+        self.fwd_kwargs = dict()
+        # self.org_weight = org_module.weight.data.clone()
+
+        
+        
+        # self.register_buffer('int_weight', torch.randint(-128, 127, (self.ori_shape[0], self.ori_shape[1]),
+        #                                                      dtype=torch.int8, requires_grad=False))
+        self.register_buffer('int_weight', torch.zeros((self.ori_shape[0], self.ori_shape[1]), dtype=torch.int8))
+
+         # Check if bias already exists in the parent class
+        if not hasattr(self, 'bias'):
+            if org_module and org_module.bias is not None:
+                self.register_buffer('bias', org_module.bias.data)
+            else:
+                self.register_buffer('bias', torch.zeros(size=(self.ori_shape[0],)))
+
+        self.n_bits = n_bits
+
+        # de-activate the quantized forward default
+        self.use_weight_quant = False
+        self.use_act_quant = False
+
+        self.ignore_reconstruction = False
+
+        self.register_buffer('act_delta',torch.randn(size=(num_steps,), dtype=torch.float16)) ## should be float16
+        self.register_buffer('act_zp',torch.randn(size=(num_steps,), dtype=torch.float16)) ## should be float16
+        self.register_buffer('zp_times_weight_channel_sum',torch.randn(size=(num_steps, self.ori_shape[0]), dtype=torch.float32)) ## should be float32
+        self.register_buffer('act_times_weight_delta',torch.randn(size=(num_steps, self.ori_shape[0]), dtype=torch.float32)) ## should be float32
+
+        self.total_steps = num_steps
+        self.current_step = self.total_steps - 1
+
+    def forward(self, input: torch.Tensor):
+        ## fetch quantization parameters
+        act_delta = self.act_delta[self.current_step]
+        act_zp = self.act_zp[self.current_step]
+        zp_times_weight_channel_sum = self.zp_times_weight_channel_sum[self.current_step]
+        act_times_weight_delta = self.act_times_weight_delta[self.current_step]
+
+        self.current_step = self.total_steps - 1 if  self.current_step - 1 < 0 else self.current_step - 1
+
+        ## perform linear operation
+        if len(input.shape) != 2:
+            original_shape = input.shape[:-1]
+            input = input.view(-1, input.shape[-1])
+        else:
+            original_shape = None
+
+        int_x = torch_quantizer.asymmetric.myQuantize(input, act_delta, act_zp)
+        output = torch_quantizer.matmul.myInt8Matmul(int_x, self.int_weight, zp_times_weight_channel_sum, act_times_weight_delta, self.bias)
+        
+        if original_shape is not None:
+            output = output.view(original_shape + (-1,)).to(torch.float16)
+        else:
+            output = output.to(torch.float16)
+        
+        return output
+
+    def set_quant_state(self, weight_quant: bool = False, act_quant: bool = False):
+        self.use_weight_quant = weight_quant
+        self.use_act_quant = act_quant
+
 class qlinear_8bit(nn.Module):
     """
     8-bit Linear Module. 
