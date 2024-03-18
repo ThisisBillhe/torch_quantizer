@@ -163,11 +163,16 @@ __global__ void myDequantizationConvKernel(KTorch *__restrict__ out,
 }
 
 __global__ void relu_kernel(int32_t* output, int N, int outputH, int outputW, int C) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const unsigned nhw = blockIdx.x * blockDim.x + threadIdx.x; 
+    const unsigned c = blockIdx.y * blockDim.y + threadIdx.y; 
 
-    if (idx < N * outputH * outputW * C) {
-        output[idx] = max(0, output[idx]);
+    if (nhw >= N*outputH*outputW || c >= C) {
+        return;
     }
+
+    unsigned idx = nhw * C + c;
+    output[idx] = max(0, output[idx]);
+
 }
 
 torch::Tensor int8ConvCUDA(const torch::Tensor &input, const torch::Tensor &filter, const int padH, const int padW,
@@ -288,8 +293,9 @@ torch::Tensor myInt8ConvCUDA(const torch::Tensor &input, const torch::Tensor &fi
 
     // Step 1.5: Layer fushion: Conv + RELU
     if (relu_fushion) {
-      int threadsPerBlockRELU = 256;
-      int blocksPerGridRELU = (N * H * W * Co + threadsPerBlockRELU - 1) / threadsPerBlockRELU;
+      dim3 threadsPerBlockRELU(16, 16); // Adjust as necessary
+      dim3 blocksPerGridRELU((N*H*W + threadsPerBlockRELU.x - 1) / threadsPerBlockRELU.x,
+                  (Co + threadsPerBlockRELU.y - 1) / threadsPerBlockRELU.y);
       relu_kernel<<<blocksPerGridRELU, threadsPerBlockRELU>>>(C.data_ptr<int32_t>(), N, H, W, Co);
     }
 
