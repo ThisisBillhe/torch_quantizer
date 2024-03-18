@@ -2,7 +2,7 @@ import torch
 torch.manual_seed(3407)
 from diffusers import StableDiffusionPipeline
 
-model_id = "PATH TO stable-diffusion-v1-4"
+model_id = "/home/limoj/final/stable-diffusion-v1-4"
 device = "cuda"
 
 

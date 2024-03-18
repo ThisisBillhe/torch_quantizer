@@ -2,7 +2,7 @@ import torch
 from diffusers import StableDiffusionPipeline
 import torch_quantizer as tq
 
-model_id = "PATH TO stable-diffusion-v1-4"
+model_id = "/home/limoj/final/stable-diffusion-v1-4"
 device = "cuda"
 
 

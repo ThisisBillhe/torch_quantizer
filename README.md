@@ -32,6 +32,7 @@ To benchmark and verify the inference speedup by INT8 operation, use the followi
 
 ```bash
 python3 example/benchmark/benchmark.py --o linear --bs 512 --cin 960 --cout 960
+# if conv_relu fushion is needed, parse the argument --relufushion
 python3 example/benchmark/benchmark.py --o conv2d --bs 1 --cin 512 --cout 512
 ```
 #### Benchmarking Results

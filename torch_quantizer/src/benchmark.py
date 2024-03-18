@@ -208,19 +208,21 @@ def benchmark_conv2d(bs=8, cin=384, h=32, w=32, cout=384, k=3, padding=0):
     bias = conv1.bias.to(torch.float32)
     start_time = time.perf_counter()
     torch.cuda.synchronize()
+    relu_fushion = True
     for i in range(100):
         x_nhwc = torch_quantizer.asymmetric.myQuantizeNCHW(x, act_delta, act_zp)
         if padding != 0:
             x_nhwc = F.pad(x_nhwc, pad=(0,0,padding,padding,padding,padding), value=act_zp)
-        out_int8_fused = torch_quantizer.matmul.myInt8Conv(x_nhwc, weight_nhwc, 0, 0, 1, 1, 1, 1, zp_times_weight_channel_sum, act_times_weight_delta, bias)
+        out_int8_fused = torch_quantizer.matmul.myInt8Conv(x_nhwc, weight_nhwc, 0, 0, 1, 1, 1, 1, zp_times_weight_channel_sum, act_times_weight_delta, bias, relu_fushion)
     torch.cuda.synchronize()
     end_time = time.perf_counter()
     print('average time for INT8 (Quant+Dequant): ', (end_time-start_time) / 100)
 
-def benchmark_conv2dInheritance(bs=8, cin=384, h=32, w=32, cout=384, k=3, padding=0):
+def benchmark_conv2dInheritance(bs=8, cin=384, h=32, w=32, cout=384, k=3, padding=0, relu_fushion=False):
     x = (torch.randn((bs,cin,h,w)) + 3).half().cuda()
     conv1 = nn.Conv2d(cout,cin,k, padding=padding).half().cuda()
-    my_quant_conv = qconv2d_8bit_Cinherit(cout,cin,k, padding=padding).cuda()
+    print("Enter qconvCinherit, relu_fushion = :", relu_fushion)
+    my_quant_conv = qconv2d_8bit_Cinherit(cout,cin,k, padding=padding, relu_fushion=relu_fushion).cuda()
     my_quant_conv.bias.requires_grad = False
 
     conv1.weight.requires_grad = False

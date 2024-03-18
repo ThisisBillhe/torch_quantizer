@@ -11,6 +11,9 @@ build
 *.yaml
 *.DS_Store
 *.sbatch
+*.deb
+*.png
+example/*test.cu
 # Distribution / packaging
 __pycache__/
 .Python

@@ -12,7 +12,7 @@ def main():
         conv1 = qconv2d_8bit_Cinherit(cout, cin, 3, padding = padding).cuda()
 
         output = conv1(x)
-        # print(output)
+        print(output)
         # print(conv1.int_weight)
         # print('--------------------------------------')
         # print(conv1.int_weight)

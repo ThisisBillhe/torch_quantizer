@@ -3,7 +3,7 @@ torch.manual_seed(3407)
 from diffusers import StableDiffusionPipeline
 import torch_quantizer as tq
 
-model_id = "PATH TO stable-diffusion-v1-4"
+model_id = "/home/limoj/final/stable-diffusion-v1-4"
 device = "cuda"
 
 
@@ -14,7 +14,8 @@ aq_params = {'n_bits': 8, 'channel_wise': False, 'scale_method': 'mse'}
 ddim_steps = 50
 
 ## convert to INT8 model
-pipe.unet = tq.real_quant(pipe.unet, n_bits=8, num_steps=ddim_steps, ckpt_path="PATH TO UNet2DConditionModel_8bits_{}steps.pth".format(ddim_steps))
+# pipe.unet = tq.real_quant(pipe.unet, n_bits=8, num_steps=ddim_steps, ckpt_path="PATH TO UNet2DConditionModel_8bits_{}steps.pth".format(ddim_steps))
+pipe.unet = tq.real_quant(pipe.unet, n_bits=8, num_steps=ddim_steps, ckpt_path=None)
 
 ## sampling
 pipe = pipe.to(device)

@@ -169,7 +169,7 @@ class qlinear_8bit(nn.Module):
         self.total_steps = num_steps
         self.current_step = self.total_steps - 1
 
-    def forward(self, input: torch.Tensor):
+    def forward(self, input: torch.Tensor, scale = None):
         ## fetch quantization parameters
         act_delta = self.act_delta[self.current_step]
         act_zp = self.act_zp[self.current_step]
@@ -234,7 +234,7 @@ class qconv2d_8bit(nn.Module):
         self.total_steps = num_steps
         self.current_step = self.total_steps - 1
 
-    def forward(self, input: torch.Tensor):
+    def forward(self, input: torch.Tensor, scale = None):
         ## fetch quantization parameters
         act_delta = self.act_delta[self.current_step]
         act_zp = self.act_zp[self.current_step]
@@ -251,7 +251,7 @@ class qconv2d_8bit(nn.Module):
             x_nhwc = F.pad(x_nhwc, pad=(0,0,self.fwd_kwargs['padH'],self.fwd_kwargs['padH'],self.fwd_kwargs['padW'],self.fwd_kwargs['padW']), value=act_zp)
         output_nchw = torch_quantizer.matmul.myInt8Conv(x_nhwc, self.int_weight, 0,0, self.fwd_kwargs['strideH'],\
                                              self.fwd_kwargs['strideW'],self.fwd_kwargs['dilationH'],self.fwd_kwargs['dilationW'],\
-                                             zp_times_weight_channel_sum, act_times_weight_delta, self.bias).to(torch.float16)
+                                             zp_times_weight_channel_sum, act_times_weight_delta, self.bias, False).to(torch.float16)
 
         return output_nchw
 
@@ -265,7 +265,7 @@ class qconv2d_8bit_Cinherit(nn.Conv2d):
     """
     def __init__(self, in_channels:int = 0, out_channels:int = 0, kernel_size: tuple[int, ...] = 1, stride:tuple[int, ...] = 1, 
                 padding:tuple[int, ...] = 0, padding_mode:str = "zeros", dilation:tuple[int, ...] = 1, groups:int = 1, bias:bool = True,
-                org_module: nn.Conv2d = None, n_bits=8, num_steps=1):
+                org_module: nn.Conv2d = None, n_bits=8, num_steps=1, relu_fushion:bool=False):
         if org_module:
             in_channels = org_module.in_channels
             out_channels = org_module.out_channels
@@ -313,7 +313,7 @@ class qconv2d_8bit_Cinherit(nn.Conv2d):
         #                         dilationH=org_module.dilation[0], dilationW=org_module.dilation[1])
         
         self.weight_nhwc_shape = [self.ori_shape[0], self.ori_shape[2], self.ori_shape[3], self.ori_shape[1]]
-
+        self.relu_fushion = relu_fushion
         self.n_bits = n_bits
         # self.weight = torch.tensor(torch.randint(-128, 127, self.weight_nhwc_shape, dtype=torch.int8))
         self.register_buffer('int_weight', torch.randint(-128, 127, self.weight_nhwc_shape,
@@ -355,7 +355,7 @@ class qconv2d_8bit_Cinherit(nn.Conv2d):
             x_nhwc = F.pad(x_nhwc, pad=(0,0,self.padH,self.padH,self.padW,self.padW), value=act_zp)
         output_nchw = torch_quantizer.matmul.myInt8Conv(x_nhwc, self.int_weight, 0,0, self.strideH,
                                              self.strideW, self.dilationH ,self.dilationW,
-                                             zp_times_weight_channel_sum, act_times_weight_delta, self.bias).to(torch.float16)
+                                             zp_times_weight_channel_sum, act_times_weight_delta, self.bias, self.relu_fushion).to(torch.float16)
 
         return output_nchw
 

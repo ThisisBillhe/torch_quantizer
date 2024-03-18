@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--w', type=int, help='Width of the input image', default=64)
     parser.add_argument('--k', type=int, help='Kernel size', default=3)
     parser.add_argument('--p', type=int, help='Padding size', default=0)
+    parser.add_argument('--relufushion', action='store_true', help='Relu fushion')
     
     args = parser.parse_args()
 
@@ -33,7 +34,8 @@ def main():
         # Ensure required arguments for conv2d operation are provided
         if args.cin > 0 and args.cout > 0 and args.h > 0 and args.w > 0 and args.k > 0:
             # tq.benchmark_conv2d(bs=args.bs, cin=args.cin, h=args.h, w=args.w, cout=args.cout, k=args.k, padding=args.p)
-            tq.benchmark_conv2dInheritance(bs=args.bs, cin=args.cin, h=args.h, w=args.w, cout=args.cout, k=args.k, padding=args.p)
+            print("Enter benchmark, relufushion: ", args.relufushion)
+            tq.benchmark_conv2dInheritance(bs=args.bs, cin=args.cin, h=args.h, w=args.w, cout=args.cout, k=args.k, padding=args.p, relu_fushion=args.relufushion)
         else:
             print("Error: cin, cout, h, w, and k are required for conv2d benchmark.")
 

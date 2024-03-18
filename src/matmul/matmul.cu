@@ -33,10 +33,11 @@ torch::Tensor int8MatmulCUDA(const torch::Tensor &A, const torch::Tensor &B) {
           ElementOutput, 128 / cutlass::sizeof_bits<ElementOutput>::value,
           ElementAccumulator, ElementCompute>,
       cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>, 4>;
-
+      
   Gemm gemmOp;
 
   using GemmCoord = cutlass::gemm::GemmCoord;
+
 
   typename Gemm::Arguments arguments{
       {static_cast<GemmCoord::Index>(M), static_cast<GemmCoord::Index>(N),
@@ -118,6 +119,55 @@ torch::Tensor myInt8MatmulCUDA(const torch::Tensor &A,
 
     // Step 4: Return the dequantized output
     return out;
+}
+
+template <typename KTorch>
+__global__ void myDequantizationConvKernel(KTorch *__restrict__ out,
+                                           const int *__restrict__ x,
+                                           const KTorch *__restrict__ zp_times_weight_channel_sum,
+                                           const KTorch *__restrict__ act_times_weight_delta,
+                                           const KTorch *__restrict__ y,
+                                           const unsigned N, const unsigned H, const unsigned W, const unsigned C) {
+    // Calculate indices for H, W, and C using block dimensions
+    const unsigned nhw = blockIdx.x * blockDim.x + threadIdx.x; // Index for H
+    const unsigned c = blockIdx.y * blockDim.y + threadIdx.y; // Index for W
+    // const unsigned c = blockIdx.z * blockDim.z + threadIdx.z; // Index for C
+
+    // Check if the current thread is within the bounds for H, W, and C
+    if (nhw >= N*H*W || c >= C) {
+        return;
+    }
+
+    // Split the combined index back into N and H indices
+    // const unsigned n = nh / H; // Recover N
+    // const unsigned h = nh % H; // Recover H
+
+    // Calculate the linear index for the 4D array
+    // unsigned index = n * H * W * C + h * W * C + w * C + c;
+    unsigned index = nhw * C + c;
+
+    // Convert int32_t element to float32
+    float xElement = static_cast<float>(x[index]);
+
+    // Get zp_times_weight_channel_sum and act_times_weight_delta for the current channel
+    float zp_times_weight_channel_sum_element = zp_times_weight_channel_sum[c];
+    float act_times_weight_delta_element = act_times_weight_delta[c];
+
+    xElement -= zp_times_weight_channel_sum_element;
+    xElement *= act_times_weight_delta_element;
+    xElement += y[c];
+
+    // Write the result back
+    out[index] = xElement;
+
+}
+
+__global__ void relu_kernel(int32_t* output, int N, int outputH, int outputW, int C) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < N * outputH * outputW * C) {
+        output[idx] = max(0, output[idx]);
+    }
 }
 
 torch::Tensor int8ConvCUDA(const torch::Tensor &input, const torch::Tensor &filter, const int padH, const int padW,
@@ -224,61 +274,28 @@ torch::Tensor int8ConvCUDA(const torch::Tensor &input, const torch::Tensor &filt
   return output;
 }
 
-template <typename KTorch>
-__global__ void myDequantizationConvKernel(KTorch *__restrict__ out,
-                                           const int *__restrict__ x,
-                                           const KTorch *__restrict__ zp_times_weight_channel_sum,
-                                           const KTorch *__restrict__ act_times_weight_delta,
-                                           const KTorch *__restrict__ y,
-                                           const unsigned N, const unsigned H, const unsigned W, const unsigned C) {
-    // Calculate indices for H, W, and C using block dimensions
-    const unsigned nhw = blockIdx.x * blockDim.x + threadIdx.x; // Index for H
-    const unsigned c = blockIdx.y * blockDim.y + threadIdx.y; // Index for W
-    // const unsigned c = blockIdx.z * blockDim.z + threadIdx.z; // Index for C
-
-    // Check if the current thread is within the bounds for H, W, and C
-    if (nhw >= N*H*W || c >= C) {
-        return;
-    }
-
-    // Split the combined index back into N and H indices
-    // const unsigned n = nh / H; // Recover N
-    // const unsigned h = nh % H; // Recover H
-
-    // Calculate the linear index for the 4D array
-    // unsigned index = n * H * W * C + h * W * C + w * C + c;
-    unsigned index = nhw * C + c;
-
-    // Convert int32_t element to float32
-    float xElement = static_cast<float>(x[index]);
-
-    // Get zp_times_weight_channel_sum and act_times_weight_delta for the current channel
-    float zp_times_weight_channel_sum_element = zp_times_weight_channel_sum[c];
-    float act_times_weight_delta_element = act_times_weight_delta[c];
-
-    xElement -= zp_times_weight_channel_sum_element;
-    xElement *= act_times_weight_delta_element;
-    xElement += y[c];
-
-    // Write the result back
-    out[index] = xElement;
-
-}
-
 torch::Tensor myInt8ConvCUDA(const torch::Tensor &input, const torch::Tensor &filter, const int padH, const int padW,
                                const int strideH, const int strideW, const int dilationH, const int dilationW,
                                          const torch::Tensor & zp_times_weight_channel_sum,
                                          const torch::Tensor & act_times_weight_delta,
-                                         const torch::Tensor & y) {
+                                         const torch::Tensor & y, const bool relu_fushion) {
     // Step 1: Perform GEMM Operation
     torch::Tensor C = int8ConvCUDA(input, filter, padH, padW, strideH, strideW, dilationH, dilationW);
-
-    // Step 2: Setup for Dequantization
     auto N = C.size(0);
     auto H = C.size(1);
     auto W = C.size(2);
     auto Co = C.size(3);
+
+    // Step 1.5: Layer fushion: Conv + RELU
+    if (relu_fushion) {
+      int threadsPerBlockRELU = 256;
+      int blocksPerGridRELU = (N * H * W * Co + threadsPerBlockRELU - 1) / threadsPerBlockRELU;
+      relu_kernel<<<blocksPerGridRELU, threadsPerBlockRELU>>>(C.data_ptr<int32_t>(), N, H, W, Co);
+    }
+
+    // Step 2: Setup for Dequantization
     auto out = torch::empty_like(C, torch::dtype(torch::kFloat).device(C.device()));
+
 
     // Step 3: Dequantization Kernel Call
     dim3 threadsPerBlock(16, 16); // Adjust as necessary

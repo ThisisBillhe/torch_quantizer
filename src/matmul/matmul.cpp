@@ -36,13 +36,14 @@ torch::Tensor myInt8Conv(const torch::Tensor &input, const torch::Tensor &filter
                                const int strideH, const int strideW, const int dilationH, const int dilationW,
                                          const torch::Tensor & zp_times_weight_channel_sum,
                                          const torch::Tensor & act_times_weight_delta,
-                                         const torch::Tensor & y) {
+                                         const torch::Tensor & y, const bool relu_fushion) {
   torch::checkAllContiguous("myInt8Conv", {{input, "input", 0}, {filter, "filter", 1}, {zp_times_weight_channel_sum, "zp_times_weight_channel_sum", 2},
                                                {act_times_weight_delta, "act_times_weight_delta", 3}, {y, "y", 4}});
   // TODO(Tingxuan): support more data type
+//   std::cout<<relu_fushion<<std::endl;
   torch::checkDeviceType("myInt8Conv", {input, filter, zp_times_weight_channel_sum, act_times_weight_delta, y}, at::DeviceType::CUDA);
   return myInt8ConvCUDA(input, filter, padH, padW, strideH, strideW, dilationH, dilationW,
-                             zp_times_weight_channel_sum, act_times_weight_delta, y);
+                             zp_times_weight_channel_sum, act_times_weight_delta, y, relu_fushion);
 }
 
 void buildSubmodule(py::module &mod) {
@@ -76,6 +77,6 @@ void buildSubmodule(py::module &mod) {
         "output: torch.Tensor(N x H' x W'x Co, INT32, CUDA).sub_(zp_times_weight_channel_sum).mul_(act_times_weight_delta)+ y\n"
         "output = conv(input, filter)",
         py::arg("input"), py::arg("filter"), py::arg("padH"), py::arg("padW"), py::arg("strideH"), py::arg("strideW"), 
-        py::arg("dilationH"), py::arg("dilationW"), py::arg("zp_times_weight_channel_sum"), py::arg("act_times_weight_delta"), py::arg("y"));
+        py::arg("dilationH"), py::arg("dilationW"), py::arg("zp_times_weight_channel_sum"), py::arg("act_times_weight_delta"), py::arg("y"), py::arg("relu_fushion"));
 }
 }  // namespace TORCHQ::matmul

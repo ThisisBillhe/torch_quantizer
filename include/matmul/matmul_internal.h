@@ -19,5 +19,5 @@ torch::Tensor myInt8ConvCUDA(const torch::Tensor &input, const torch::Tensor &fi
                                const int strideH, const int strideW, const int dilationH, const int dilationW,
                                          const torch::Tensor & zp_times_weight_channel_sum,
                                          const torch::Tensor & act_times_weight_delta,
-                                         const torch::Tensor & y);
+                                         const torch::Tensor & y, const bool relu_fushion);
 }  // namespace TORCHQ::matmul
