@@ -19,6 +19,6 @@ pipe.unet = tq.real_quant(pipe.unet, n_bits=8, num_steps=ddim_steps, ckpt_path=N
 
 ## sampling
 pipe = pipe.to(device)
-prompt = "A cozy cabin nestled in a snowy forest with smoke rising from the chimney"
+prompt = "A cute cat"
 image = pipe(prompt, num_inference_steps=ddim_steps).images[0]  
 image.save("cabin_8bit.png")

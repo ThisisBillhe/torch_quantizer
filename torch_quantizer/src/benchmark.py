@@ -192,6 +192,7 @@ def benchmark_conv2d(bs=8, cin=384, h=32, w=32, cout=384, k=3, padding=0):
     torch.cuda.synchronize()
     end_time = time.perf_counter()
     print('average time for FP32: ', (end_time-start_time) / 100)
+    
 
     conv1.half()
     start_time = time.perf_counter()
@@ -201,14 +202,13 @@ def benchmark_conv2d(bs=8, cin=384, h=32, w=32, cout=384, k=3, padding=0):
     torch.cuda.synchronize()
     end_time = time.perf_counter()
     print('average time for FP16: ', (end_time-start_time) / 100)
-
     ## int8Conv + fused dequantization
     zp_times_weight_channel_sum = act_zp.to(torch.float32) * int_weight.sum(dim=(1,2,3))
     act_times_weight_delta = act_delta.to(torch.float32) * weight_delta.reshape(-1,)
     bias = conv1.bias.to(torch.float32)
     start_time = time.perf_counter()
     torch.cuda.synchronize()
-    relu_fushion = True
+    relu_fushion = False
     for i in range(100):
         x_nhwc = torch_quantizer.asymmetric.myQuantizeNCHW(x, act_delta, act_zp)
         if padding != 0:

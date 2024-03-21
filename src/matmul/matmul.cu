@@ -162,16 +162,17 @@ __global__ void myDequantizationConvKernel(KTorch *__restrict__ out,
 
 }
 
-__global__ void relu_kernel(int32_t* output, int N, int outputH, int outputW, int C) {
+template <typename KTorch>
+__global__ void relu_kernel(int32_t* output, const int N, const int outputH, const int outputW, const int C, const KTorch *__restrict__ zp_times_weight_channel_sum) {
     const unsigned nhw = blockIdx.x * blockDim.x + threadIdx.x; 
     const unsigned c = blockIdx.y * blockDim.y + threadIdx.y; 
 
     if (nhw >= N*outputH*outputW || c >= C) {
         return;
     }
-
+    int32_t zp_times_weight_channel_sum_element = static_cast<int>(zp_times_weight_channel_sum[c]);
     unsigned idx = nhw * C + c;
-    output[idx] = max(0, output[idx]);
+    output[idx] = max(zp_times_weight_channel_sum_element, output[idx]);
 
 }
 
@@ -296,7 +297,8 @@ torch::Tensor myInt8ConvCUDA(const torch::Tensor &input, const torch::Tensor &fi
       dim3 threadsPerBlockRELU(16, 16); // Adjust as necessary
       dim3 blocksPerGridRELU((N*H*W + threadsPerBlockRELU.x - 1) / threadsPerBlockRELU.x,
                   (Co + threadsPerBlockRELU.y - 1) / threadsPerBlockRELU.y);
-      relu_kernel<<<blocksPerGridRELU, threadsPerBlockRELU>>>(C.data_ptr<int32_t>(), N, H, W, Co);
+      relu_kernel<<<blocksPerGridRELU, threadsPerBlockRELU>>>(C.data_ptr<int32_t>(), N, H, W, Co,
+                                                              zp_times_weight_channel_sum.data_ptr<float>());
     }
 
     // Step 2: Setup for Dequantization
